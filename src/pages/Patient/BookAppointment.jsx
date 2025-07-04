@@ -13,6 +13,7 @@ const BookAppointment = () => {
   const { doctors } = useDoctorStore();
   const { bookAppointment } = useAppointmentStore();
   const { user } = useAuthStore();
+
   const [step, setStep] = useState(1);
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [appointmentData, setAppointmentData] = useState({
@@ -59,25 +60,53 @@ const BookAppointment = () => {
     };
 
     const result = await bookAppointment(booking);
-    
     if (result.success) {
       toast.success('Appointment booked successfully!');
       navigate('/patient/appointments');
     } else {
       toast.error('Failed to book appointment');
     }
-    
     setIsLoading(false);
   };
 
   const getAvailableSlots = () => {
-    if (!selectedDoctor || !appointmentData.date) return [];
-    
-    const selectedDate = new Date(appointmentData.date);
-    const dayName = selectedDate.toLocaleLowerCase().replace(/^\w/, c => c.toLowerCase());
-    const dayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][selectedDate.getDay()];
-    
-    return selectedDoctor.availability[dayKey] || [];
+    if (!selectedDoctor || !appointmentData.date) {
+      return [];
+    }
+
+    try {
+      const selectedDate = new Date(appointmentData.date);
+      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const dayKey = dayNames[selectedDate.getDay()];
+      
+      // Get availability for the selected day
+      const dayAvailability = selectedDoctor.availability && selectedDoctor.availability[dayKey];
+      
+      if (!dayAvailability || !Array.isArray(dayAvailability)) {
+        return [];
+      }
+
+      return dayAvailability;
+    } catch (error) {
+      console.error('Error getting available slots:', error);
+      return [];
+    }
+  };
+
+  const handleDateChange = (e) => {
+    const newDate = e.target.value;
+    setAppointmentData({
+      ...appointmentData,
+      date: newDate,
+      time: '' // Reset time when date changes
+    });
+  };
+
+  const handleTimeSelect = (time) => {
+    setAppointmentData({
+      ...appointmentData,
+      time: time
+    });
   };
 
   return (
@@ -109,7 +138,6 @@ const BookAppointment = () => {
             ))}
           </div>
         </div>
-
         <div className="flex justify-between text-sm">
           <span className={step >= 1 ? 'text-primary-600 font-medium' : 'text-gray-500'}>
             Select Doctor
@@ -155,7 +183,6 @@ const BookAppointment = () => {
                         <SafeIcon icon={FiIcons.FiCheckCircle} className="w-5 h-5 text-green-600" />
                       )}
                     </div>
-
                     <div className="flex items-center mt-2">
                       <div className="flex items-center">
                         {[...Array(5)].map((_, i) => (
@@ -174,7 +201,6 @@ const BookAppointment = () => {
                         {doctor.rating} ({doctor.reviewCount})
                       </span>
                     </div>
-
                     <div className="flex items-center justify-between mt-3">
                       <span className="text-lg font-semibold text-gray-900">
                         ${doctor.consultationFee}
@@ -228,33 +254,54 @@ const BookAppointment = () => {
               <input
                 type="date"
                 value={appointmentData.date}
-                onChange={(e) => setAppointmentData({ ...appointmentData, date: e.target.value })}
+                onChange={handleDateChange}
                 min={new Date().toISOString().split('T')[0]}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Available Times
               </label>
               {appointmentData.date ? (
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                  {getAvailableSlots().map((time) => (
-                    <button
-                      key={time}
-                      onClick={() => handleDateTimeSelect(appointmentData.date, time)}
-                      className="p-2 text-sm border border-gray-300 rounded hover:border-primary-300 hover:bg-primary-50 transition-colors"
-                    >
-                      {time}
-                    </button>
-                  ))}
+                  {getAvailableSlots().length > 0 ? (
+                    getAvailableSlots().map((time, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleTimeSelect(time)}
+                        className={`p-2 text-sm border rounded transition-colors ${
+                          appointmentData.time === time
+                            ? 'border-primary-500 bg-primary-50 text-primary-700'
+                            : 'border-gray-300 hover:border-primary-300 hover:bg-primary-50'
+                        }`}
+                      >
+                        {time}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="col-span-2 text-center py-4">
+                      <p className="text-sm text-gray-500">No available times for this date</p>
+                      <p className="text-xs text-gray-400 mt-1">Please select a different date</p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm text-gray-500 py-3">Please select a date first</p>
               )}
             </div>
           </div>
+
+          {appointmentData.date && appointmentData.time && (
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => handleDateTimeSelect(appointmentData.date, appointmentData.time)}
+                className="bg-primary-600 text-white px-6 py-2 rounded-lg hover:bg-primary-700 transition-colors"
+              >
+                Continue
+              </button>
+            </div>
+          )}
         </motion.div>
       )}
 
@@ -314,7 +361,9 @@ const BookAppointment = () => {
               </label>
               <textarea
                 value={appointmentData.symptoms}
-                onChange={(e) => setAppointmentData({ ...appointmentData, symptoms: e.target.value })}
+                onChange={(e) =>
+                  setAppointmentData({ ...appointmentData, symptoms: e.target.value })
+                }
                 rows={3}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="Please describe your symptoms or reason for the consultation"
@@ -328,7 +377,9 @@ const BookAppointment = () => {
               </label>
               <textarea
                 value={appointmentData.notes}
-                onChange={(e) => setAppointmentData({ ...appointmentData, notes: e.target.value })}
+                onChange={(e) =>
+                  setAppointmentData({ ...appointmentData, notes: e.target.value })
+                }
                 rows={2}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 placeholder="Any additional information you'd like the doctor to know"
@@ -342,7 +393,9 @@ const BookAppointment = () => {
               </label>
               <select
                 value={appointmentData.type}
-                onChange={(e) => setAppointmentData({ ...appointmentData, type: e.target.value })}
+                onChange={(e) =>
+                  setAppointmentData({ ...appointmentData, type: e.target.value })
+                }
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
                 <option value="video">Video Consultation</option>
